@@ -31,7 +31,6 @@ public class MaxSimulationTimeReward implements Reward {
     public void update(Sequencer.SequencerEvent event) {
         System.out.println("🔍 MaxSimulationTimeReward chiamato con evento: " + event);
         if (event == Sequencer.SequencerEvent.FIRING_EXECUTED) {
-            System.out.println("siamo arrivati in MaxSimulationTimeReward");
             if (sequencer.getCurrentRunElapsedTime().compareTo(maxTime) >= 0) {
                 System.out.println("🛑 Stop: raggiunto tempo massimo " + maxTime + "s");
 

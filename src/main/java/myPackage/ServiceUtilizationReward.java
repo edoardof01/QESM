@@ -9,18 +9,19 @@ import org.oristool.simulator.rewards.Reward;
 import org.oristool.simulator.rewards.RewardObserver;
 import org.oristool.simulator.rewards.RewardTime;
 
+import java.math.BigDecimal;
 import java.util.HashSet;
 import java.util.Set;
 
+// Il tasso di utilizzo è pari al tasso della transizione Service
 public class ServiceUtilizationReward implements Reward {
     private final Sequencer sequencer;
     private int serviceCount = 0;
-    private int totalRuns = 0;
     private final Set<RewardObserver> observers = new HashSet<>();
 
     public ServiceUtilizationReward(Sequencer sequencer) {
         this.sequencer = sequencer;
-        this.sequencer.addObserver(this);
+        this.sequencer.addCurrentRunObserver(this);
     }
 
     @Override
@@ -35,8 +36,12 @@ public class ServiceUtilizationReward implements Reward {
 
     @Override
     public Object evaluate() {
-        return totalRuns > 0 ? serviceCount / (double) totalRuns : 0.0;
+        BigDecimal elapsedTime = sequencer.getCurrentRunElapsedTime();
+        return elapsedTime.compareTo(BigDecimal.ZERO) > 0
+                ? serviceCount / elapsedTime.doubleValue()
+                : 0.0;
     }
+
 
     @Override
     public void update(Sequencer.SequencerEvent event) {
@@ -47,19 +52,10 @@ public class ServiceUtilizationReward implements Reward {
                 String firedTransition = lastSuccession.getEvent().getName();
                 if ("service".equals(firedTransition)) {
                     serviceCount++;
-                    notifyObservers();
                 }
             }
-
-            totalRuns++;
-            notifyObservers();
         }
-    }
-
-    private boolean isServiceTransition(Succession succession) {
-        return succession.getChild().getFeature(PetriStateFeature.class)
-                .getEnabled().stream()
-                .anyMatch(transition -> "service".equals(transition.getName()));
+        notifyObservers();
     }
 
     @Override
@@ -79,8 +75,4 @@ public class ServiceUtilizationReward implements Reward {
         }
     }
 
-    // ✅ Getter utile per debug o metriche
-    public int getServiceCount() {
-        return serviceCount;
-    }
 }

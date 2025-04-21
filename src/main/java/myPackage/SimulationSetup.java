@@ -11,6 +11,7 @@ import org.oristool.simulator.Sequencer;
 import org.oristool.simulator.stpn.STPNSimulatorComponentsFactory;
 
 import java.math.BigDecimal;
+import java.math.RoundingMode;
 import java.util.List;
 
 public class SimulationSetup {
@@ -25,11 +26,16 @@ public class SimulationSetup {
         Place p3 = pn.addPlace("ph3");
         Place p4 = pn.addPlace("ph4");
         Place queue = pn.addPlace("queue");
-        Place abandonRatePlace = pn.addPlace("abandonRate");
+        Place blockedAttempts = pn.addPlace("blockedAttempts");
+        Place abandonPlace = pn.addPlace("abandonRate");
+
+        BigDecimal serviceRate = BigDecimal.valueOf(20);
+
+        BigDecimal abandonRate = BigDecimal.valueOf(1);
 
         // ✅ più token iniziali per far girare la rete
         marking.setTokens(p1, 50);
-        marking.setTokens(abandonRatePlace,1);
+        marking.setTokens(abandonPlace,1);
 
         Transition t0 = pn.addTransition("t0");
         Transition t1 = pn.addTransition("t1");
@@ -49,23 +55,58 @@ public class SimulationSetup {
         arrivals[3] = pn.addTransition("arrival4");
 
         Place[] phases = new Place[] { p1, p2, p3, p4 };
+
+
+        // QUEUE ARRIVALS
+        BigDecimal sumW = weights.stream()
+                .reduce(BigDecimal.ZERO, BigDecimal::add);
+        BigDecimal factor = new BigDecimal("4.0")
+                .divide(sumW, 10, RoundingMode.HALF_UP);
+        String cond = "If(queue < " + queueSize + ", 1, 0)"; // per costruire la guardia boolean->0/1
+        MarkingExpr guard = MarkingExpr.from(cond, pn);
+
         for (int i = 0; i < 4; i++) {
-            arrivals[i].addFeature(StochasticTransitionFeature.newExponentialInstance(String.valueOf(weights.get(i))));
-            pn.addPrecondition(phases[i], arrivals[i]);
+            BigDecimal lambda_i = weights.get(i).multiply(factor);
+            // uso il tasso base = lambda_i con 0/1 a seconda che queue<queueSize o meno
+            arrivals[i].addFeature(
+                    StochasticTransitionFeature.newExponentialInstance(lambda_i, guard)
+            );
+
+            pn.addPrecondition(phases[i],   arrivals[i]);
             pn.addPostcondition(arrivals[i], queue);
         }
 
-        // ✅ servizio con ciclo di ritorno su p1
-        Transition service = pn.addTransition("service");
-        service.addFeature(StochasticTransitionFeature.newExponentialInstance(String.valueOf(0.05 * poolSize)));
-        pn.addPrecondition(queue, service);
-        pn.addPostcondition(service, p1); // ciclo
 
-        // abbandono
+        // BLOCK
+        String blockCond = "If(queue >= " + queueSize + ", 1, 0)";
+        MarkingExpr blockGuard = MarkingExpr.from(blockCond, pn);
+
+        for (int i = 0; i < 4; i++) {
+            Transition blocked = pn.addTransition("blocked" + (i + 1));
+            BigDecimal lambda_i = weights.get(i).multiply(factor);
+
+            blocked.addFeature(
+                    StochasticTransitionFeature.newExponentialInstance(lambda_i, blockGuard)
+            );
+
+            pn.addPrecondition(phases[i], blocked);
+            pn.addPostcondition(blocked, blockedAttempts);
+        }
+
+
+        // SERVIZIO
+        Transition service = pn.addTransition("service");
+        service.addFeature(StochasticTransitionFeature.newExponentialInstance(String.valueOf(serviceRate.multiply(BigDecimal.valueOf(0.01*poolSize)))));
+        pn.addPrecondition(queue, service);
+        pn.addPostcondition(service, p1);
+
+
+        // ABBANDONO
         Transition abandon = pn.addTransition("abandon");
         abandon.addFeature(StochasticTransitionFeature.newExponentialInstance(new BigDecimal("1"),
                 MarkingExpr.from("0.01*abandonRate*queue", pn)));
         pn.addPrecondition(queue, abandon);
+
 
         MinimalAnalysisLogger logger = new MinimalAnalysisLogger();
         STPNSimulatorComponentsFactory factory = new STPNSimulatorComponentsFactory();
