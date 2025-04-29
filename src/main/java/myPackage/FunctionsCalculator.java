@@ -10,7 +10,6 @@ public class FunctionsCalculator {
 
     //CDF normalizzata
     public static List<BigDecimal> calculateCDF(List<BigDecimal> interArrivalTimes) {
-        // Ordina i tempi in ordine crescente
         Collections.sort(interArrivalTimes);
 
         List<BigDecimal> cdf = new ArrayList<>();

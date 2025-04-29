@@ -17,11 +17,7 @@ public class BlockProbabilityReward implements Reward {
     private final Sequencer sequencer;
 
     private int arrivalCount = 0;   // arrivi riusciti
-    /**
-     * -- GETTER --
-     *
-     * @return quante volte abbiamo tentato un arrivo e siamo stati bloccati
-     */
+
     @Getter
     private int blockCount   = 0;   // arrivi bloccati
 
@@ -46,7 +42,6 @@ public class BlockProbabilityReward implements Reward {
 
     @Override
     public void update(Sequencer.SequencerEvent event) {
-        // Reset contatori all’inizio di ciascuna run
         if (event == Sequencer.SequencerEvent.RUN_START) {
             arrivalCount = 0;
             blockCount   = 0;
@@ -67,7 +62,6 @@ public class BlockProbabilityReward implements Reward {
                 blockCount++;
             }
 
-            // Notifica gli observers a fine run se vuoi trigger immediato
             if (name.startsWith("blocked")) {
                 notifyObservers();
             }
@@ -98,9 +92,7 @@ public class BlockProbabilityReward implements Reward {
         }
     }
 
-    /**
-     * @return i timestamp (simulati) di ciascun arrivo riuscito
-     */
+
     public List<BigDecimal> getArrivalTimes() {
         return new ArrayList<>(arrivalTimes);
     }

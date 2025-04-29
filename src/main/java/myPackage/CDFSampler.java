@@ -37,13 +37,12 @@ public class CDFSampler {
             throw new IllegalArgumentException("La lista dei tempi di arrivo è vuota.");
         int nW = weights.size();
 
-        // 1) Copia + sort + CDF/PDF
+
         List<BigDecimal> copy = new ArrayList<>(interArrivalTimes);
         Collections.sort(copy);
         List<BigDecimal> cdf = FunctionsCalculator.calculateCDF(copy);
         List<BigDecimal> pdf = FunctionsCalculator.calculatePDF(cdf);
 
-        // 2) Se la PDF ha lunghezza diversa dal numero di pesi, la “riduciamo” in nW bucket
         if (pdf.size() != nW) {
             // percentili di cut (es: [0%, 60%, 80%, 90%, 100%])
             BigDecimal[] percentiles = {
@@ -59,7 +58,6 @@ public class CDFSampler {
             }
         }
 
-        // 3) Ora pdf.size() == weights.size(), possiamo continuare come prima
         boolean isConverged = false;
         int maxIt = 1000, it = 0;
         while (!isConverged && it < maxIt) {
@@ -119,7 +117,6 @@ public class CDFSampler {
         int n = percentiles.length - 1;
         List<BigDecimal> buckets = new ArrayList<>(Collections.nCopies(n, BigDecimal.ZERO));
 
-        // Calcola i cutoff percentile sui dati originali
         List<BigDecimal> sorted = new ArrayList<>(originalValues);
         Collections.sort(sorted);
         List<BigDecimal> cutoffs = new ArrayList<>();
@@ -129,7 +126,6 @@ public class CDFSampler {
             cutoffs.add(sorted.get(idx));
         }
 
-        // Mappa i pdf[i] (associati a sorted[i]) nei bucket corretti
         for (int i = 0; i < sorted.size(); i++) {
             BigDecimal value = sorted.get(i);
             BigDecimal prob = pdf.get(i);

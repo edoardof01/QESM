@@ -25,7 +25,7 @@ public class InterarrivalCollectorReward implements Reward {
     private final Map<String, List<BigDecimal>> arrivalTimesByType = new HashMap<>();
     private final Map<String, Integer> arrivalCount = new HashMap<>();
 
-    // ✅ Nuovo: per aggiornare i pesi ogni 10 inter-arrivi
+    //  per aggiornare i pesi ogni 10 inter-arrivi
     private final DynamicCDFSampler dynamicSampler;
     private List<BigDecimal> weights;
 
@@ -83,7 +83,7 @@ public class InterarrivalCollectorReward implements Reward {
 
                 arrivalCount.put(name, arrivalCount.getOrDefault(name, 0) + 1);
 
-                // ✅ Gestione aggiornamento dinamico
+                // Gestione aggiornamento dinamico
                 if (dynamicSampler != null) {
                     if (!arrivalTimes.isEmpty()) {
                         int n = arrivalTimes.size();
@@ -104,7 +104,7 @@ public class InterarrivalCollectorReward implements Reward {
         notifyObservers();
     }
 
-    /** ✅ Per salvare il grafico della CDF */
+    /**  Per salvare il grafico della CDF */
     public void reportCDF(String outputPngPath) {
         if (arrivalTimes.size() < 2) {
             System.out.println("⚠️  Pochi arrivi per calcolare inter-arrival.");
@@ -146,7 +146,7 @@ public class InterarrivalCollectorReward implements Reward {
         }
     }
 
-    /** ✅ Per stampare statistiche di arrivo */
+    /** Per stampare statistiche di arrivo */
     public void reportArrivalStats() {
         int totalArrivals = arrivalCount.values().stream().mapToInt(i -> i).sum();
 

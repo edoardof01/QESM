@@ -24,7 +24,7 @@ import java.util.List;
 public class Main {
 
     public static void main(String[] args) throws IOException {
-        // 1. Scegli modalità
+        // Scegli modalità
         if (args.length == 0 ||
                 (!args[0].equalsIgnoreCase("static") && !args[0].equalsIgnoreCase("dynamic"))) {
             System.out.println("❗ Devi specificare 'static' o 'dynamic' come argomento.");
@@ -33,13 +33,13 @@ public class Main {
         boolean useDynamicMode = args[0].equalsIgnoreCase("dynamic");
         String mode = useDynamicMode ? "dynamic" : "static";
 
-        // 1b. Prepara cartella di output
+        //  Prepara cartella di output
         File outDir = new File("output");
         if (!outDir.exists()) {
             outDir.mkdirs();
         }
 
-        // 2. Parametri base
+        //  Parametri base
         int queueSize = 8;
         int poolSize  = 8;
         int rounds = 1;
@@ -52,7 +52,7 @@ public class Main {
         }
 
 
-        // 3. Pesi iniziali normalizzati
+        // Pesi iniziali normalizzati
         List<BigDecimal> weights = new ArrayList<>(List.of(
                 new BigDecimal("0.9"),
                 new BigDecimal("0.05"),
@@ -60,7 +60,7 @@ public class Main {
                 new BigDecimal("0.02")
         ));
 
-        // 4. Sampler dinamico (se richiesto)
+        // Sampler dinamico (se richiesto)
         DynamicCDFSampler dynamicSampler = null;
         if (useDynamicMode) {
             dynamicSampler = new DynamicCDFSampler(
@@ -71,7 +71,7 @@ public class Main {
             );
         }
 
-        // 5. Loop principale
+        // Loop principale
         for (int round = 1; round <= rounds; round++) {
             System.out.println("\n==== ROUND " + round + " (" + mode + ") ====");
 
@@ -85,7 +85,6 @@ public class Main {
             var utilizationReward = new ServiceUtilizationReward(sequencer, poolSize);
             List<Reward> observers = List.of(abandonReward, blockReward, utilizationReward);
 
-            // Collector per inter-arrival
             var arrivalCollector = new InterarrivalCollectorReward(sequencer, dynamicSampler, weights);
 
             // Tempo massimo simulazione
@@ -233,13 +232,13 @@ public class Main {
     public static void plotInterarrivalHistogram(List<BigDecimal> interArrivals, int buckets, String filename) throws IOException {
         if (interArrivals.isEmpty()) return;
 
-        // 1. Trova min e max per normalizzazione
+        //  Trova min e max per normalizzazione
         BigDecimal min = Collections.min(interArrivals);
         BigDecimal max = Collections.max(interArrivals);
         BigDecimal range = max.subtract(min);
         if (range.compareTo(BigDecimal.ZERO) == 0) range = BigDecimal.ONE;
 
-        // 2. Inizializza bucket
+        //  Inizializza bucket
         int[] histogram = new int[buckets];
         for (BigDecimal val : interArrivals) {
             BigDecimal normalized = val.subtract(min).divide(range, 6, RoundingMode.HALF_UP);
@@ -248,14 +247,14 @@ public class Main {
             histogram[index]++;
         }
 
-        // 3. Costruisci la serie
+        //  Costruisci la serie
         XYSeries histSeries = new XYSeries("Distribuzione inter-arrivi");
         for (int i = 0; i < buckets; i++) {
             double x = (i + 0.5) / buckets; // centro del bucket
             histSeries.add(x, histogram[i]);
         }
 
-        // 4. Dataset e grafico
+        //  Dataset e grafico
         XYSeriesCollection dataset = new XYSeriesCollection();
         dataset.addSeries(histSeries);
 

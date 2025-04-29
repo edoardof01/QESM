@@ -1,14 +1,14 @@
 {
   "round": 4,
-  "mode": "static",
-  "abbandono": 0.0,
-  "blocco": 0.22459893048128343,
-  "utilizzo": 0.6609381030860064,
+  "mode": "dynamic",
+  "abbandono": 0.025,
+  "blocco": 0.1836734693877551,
+  "utilizzo": 0.3616631664544605,
   "weights": [
-    0.610731,
-    0.199015,
-    0.095219,
-    0.095036
+    0.625010,
+    0.199997,
+    0.099996,
+    0.074996
   ],
   "images": {
     "fit": "bph_fit_chart_round4.png",

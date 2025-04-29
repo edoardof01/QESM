@@ -67,12 +67,9 @@ public class DynamicCDFSampler {
             }
             System.out.println();
         }
-
-        // 1. CDF + PDF
         List<BigDecimal> cdf = FunctionsCalculator.calculateCDF(sorted);
         List<BigDecimal> pdf = FunctionsCalculator.calculatePDF(cdf);
 
-        // 2. Aggregazione per percentili
         List<BigDecimal> aggregated = aggregatePdfByPercentiles(pdf, sorted);
 
         if (verbose) {
@@ -84,10 +81,8 @@ public class DynamicCDFSampler {
             }
         }
 
-        // 3. Update dei pesi
         List<BigDecimal> updatedWeights = sampler.updateWithObservedPdf(aggregated, weights);
 
-        // 4. Reset contatore arrivi
         arrivalsSinceLastUpdate = 0;
 
         return updatedWeights;
