@@ -1,3 +1,4 @@
+
 package myPackage;
 
 import java.math.BigDecimal;
@@ -44,10 +45,17 @@ public class CDFSampler {
 
         // 2) Se la PDF ha lunghezza diversa dal numero di pesi, la “riduciamo” in nW bucket
         if (pdf.size() != nW) {
-            pdf = aggregatePdf(pdf, nW);
+            // percentili di cut (es: [0%, 60%, 80%, 90%, 100%])
+            BigDecimal[] percentiles = {
+                    BigDecimal.ZERO,
+                    new BigDecimal("0.60"),
+                    new BigDecimal("0.80"),
+                    new BigDecimal("0.90"),
+                    BigDecimal.ONE
+            };
+            pdf = aggregatePdfByPercentiles(pdf, copy, percentiles);
             if (verbose) {
-                System.out.printf("⚠️  Aggreghiamo PDF da %d a %d elementi%n",
-                        interArrivalTimes.size(), nW);
+                System.out.printf("⚠️  PDF aggregata per percentili: %s%n", List.of(percentiles));
             }
         }
 
@@ -70,19 +78,6 @@ public class CDFSampler {
                 System.out.printf("⚠️  No conv. dopo %d it.%n", maxIt);
         }
         return weights;
-    }
-
-    /** Raggruppa la pdf di lunghezza M in k bucket, sommando i valori. */
-    private List<BigDecimal> aggregatePdf(List<BigDecimal> pdf, int k) {
-        List<BigDecimal> agg = new ArrayList<>(Collections.nCopies(k, BigDecimal.ZERO));
-        int M = pdf.size();
-        for (int i = 0; i < M; i++) {
-            // mappa l’indice i in un bucket [0..k-1]
-            int bucket = (int)((long)i * k / M);
-            if (bucket >= k) bucket = k-1;
-            agg.set(bucket, agg.get(bucket).add(pdf.get(i)));
-        }
-        return agg;
     }
 
     private List<BigDecimal> estimateWeightsFromPDF(List<BigDecimal> pdf) {
@@ -119,4 +114,65 @@ public class CDFSampler {
         }
         return conv;
     }
+
+    private List<BigDecimal> aggregatePdfByPercentiles(List<BigDecimal> pdf, List<BigDecimal> originalValues, BigDecimal[] percentiles) {
+        int n = percentiles.length - 1;
+        List<BigDecimal> buckets = new ArrayList<>(Collections.nCopies(n, BigDecimal.ZERO));
+
+        // Calcola i cutoff percentile sui dati originali
+        List<BigDecimal> sorted = new ArrayList<>(originalValues);
+        Collections.sort(sorted);
+        List<BigDecimal> cutoffs = new ArrayList<>();
+        for (BigDecimal p : percentiles) {
+            int idx = p.multiply(new BigDecimal(sorted.size())).intValue();
+            if (idx >= sorted.size()) idx = sorted.size() - 1;
+            cutoffs.add(sorted.get(idx));
+        }
+
+        // Mappa i pdf[i] (associati a sorted[i]) nei bucket corretti
+        for (int i = 0; i < sorted.size(); i++) {
+            BigDecimal value = sorted.get(i);
+            BigDecimal prob = pdf.get(i);
+
+            for (int j = 0; j < n; j++) {
+                if (value.compareTo(cutoffs.get(j)) >= 0 && value.compareTo(cutoffs.get(j + 1)) <= 0) {
+                    buckets.set(j, buckets.get(j).add(prob));
+                    break;
+                }
+            }
+        }
+
+        return buckets;
+    }
+
+    public List<BigDecimal> updateWithObservedPdf(
+            List<BigDecimal> observedPdf,
+            List<BigDecimal> weights) {
+
+        if (observedPdf.size() != weights.size()) {
+            throw new IllegalArgumentException("PDF e pesi devono avere la stessa lunghezza");
+        }
+
+        boolean isConverged = false;
+        int maxIt = 1000, it = 0;
+        List<BigDecimal> observed = estimateWeightsFromPDF(observedPdf);
+
+        while (!isConverged && it < maxIt) {
+            if (verbose && (it == 0 || it % 200 == 0 || it == maxIt - 1)) {
+                System.out.printf("[Iter %4d] theor=%s | obs=%s%n", it, weights, observed);
+            }
+            isConverged = adjustWeights(weights, observed);
+            it++;
+        }
+
+        if (verbose) {
+            if (isConverged)
+                System.out.printf("✅ Convergenza in %d it.%n", it);
+            else
+                System.out.printf("⚠️  No conv. dopo %d it.%n", maxIt);
+        }
+        return weights;
+    }
+
+
 }

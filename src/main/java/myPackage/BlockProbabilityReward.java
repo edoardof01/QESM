@@ -1,7 +1,8 @@
+
 package myPackage;
 
+import lombok.Getter;
 import org.oristool.analyzer.Succession;
-import org.oristool.petrinet.Transition;
 import org.oristool.simulator.Sequencer;
 import org.oristool.simulator.rewards.DiscreteRewardTime;
 import org.oristool.simulator.rewards.Reward;
@@ -16,6 +17,12 @@ public class BlockProbabilityReward implements Reward {
     private final Sequencer sequencer;
 
     private int arrivalCount = 0;   // arrivi riusciti
+    /**
+     * -- GETTER --
+     *
+     * @return quante volte abbiamo tentato un arrivo e siamo stati bloccati
+     */
+    @Getter
     private int blockCount   = 0;   // arrivi bloccati
 
     private final List<BigDecimal> arrivalTimes = new ArrayList<>();
@@ -98,10 +105,4 @@ public class BlockProbabilityReward implements Reward {
         return new ArrayList<>(arrivalTimes);
     }
 
-    /**
-     * @return quante volte abbiamo tentato un arrivo e siamo stati bloccati
-     */
-    public int getBlockCount() {
-        return blockCount;
-    }
 }

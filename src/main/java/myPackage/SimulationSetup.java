@@ -1,6 +1,7 @@
-//SimulationSetup.java
+
 
 package myPackage;
+import lombok.Getter;
 import org.oristool.models.stpn.MarkingExpr;
 import org.oristool.models.stpn.trees.StochasticTransitionFeature;
 import org.oristool.petrinet.Marking;
@@ -14,6 +15,7 @@ import java.math.BigDecimal;
 import java.math.RoundingMode;
 import java.util.List;
 
+@Getter
 public class SimulationSetup {
     private final Sequencer sequencer;
 
@@ -113,7 +115,4 @@ public class SimulationSetup {
         this.sequencer = new Sequencer(pn, marking, factory, logger);
     }
 
-    public Sequencer getSequencer() {
-        return sequencer;
-    }
 }

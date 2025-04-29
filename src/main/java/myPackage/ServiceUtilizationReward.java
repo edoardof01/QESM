@@ -1,8 +1,9 @@
-//ServiceUtilizationReward.java
+
 package myPackage;
 
 import org.oristool.analyzer.Succession;
 import org.oristool.models.pn.PetriStateFeature;
+import org.oristool.petrinet.Marking;
 import org.oristool.simulator.Sequencer;
 import org.oristool.simulator.rewards.DiscreteRewardTime;
 import org.oristool.simulator.rewards.Reward;
@@ -13,14 +14,17 @@ import java.math.BigDecimal;
 import java.util.HashSet;
 import java.util.Set;
 
-// Il tasso di utilizzo è pari al tasso della transizione Service
+// ServiceUtilizationReward corretto: calcolo su min(PoolSize, QueueLength)
 public class ServiceUtilizationReward implements Reward {
     private final Sequencer sequencer;
-    private int serviceCount = 0;
+    private final int poolSize;
+    private double accumulatedService = 0.0;
+    private BigDecimal lastTime = BigDecimal.ZERO;
     private final Set<RewardObserver> observers = new HashSet<>();
 
-    public ServiceUtilizationReward(Sequencer sequencer) {
+    public ServiceUtilizationReward(Sequencer sequencer, int poolSize) {
         this.sequencer = sequencer;
+        this.poolSize = poolSize;
         this.sequencer.addCurrentRunObserver(this);
     }
 
@@ -38,7 +42,7 @@ public class ServiceUtilizationReward implements Reward {
     public Object evaluate() {
         BigDecimal elapsedTime = sequencer.getCurrentRunElapsedTime();
         return elapsedTime.compareTo(BigDecimal.ZERO) > 0
-                ? serviceCount / elapsedTime.doubleValue()
+                ? accumulatedService / elapsedTime.doubleValue()
                 : 0.0;
     }
 
@@ -46,17 +50,33 @@ public class ServiceUtilizationReward implements Reward {
     @Override
     public void update(Sequencer.SequencerEvent event) {
         if (event == Sequencer.SequencerEvent.FIRING_EXECUTED) {
-            Succession lastSuccession = sequencer.getLastSuccession();
+            BigDecimal currentTime = sequencer.getCurrentRunElapsedTime();
+            BigDecimal deltaT = currentTime.subtract(lastTime);
 
-            if (lastSuccession != null) {
-                String firedTransition = lastSuccession.getEvent().getName();
-                if ("service".equals(firedTransition)) {
-                    serviceCount++;
+            if (deltaT.compareTo(BigDecimal.ZERO) > 0) {
+                Succession lastSuccession = sequencer.getLastSuccession();
+                if (lastSuccession != null) {
+                    Marking marking = lastSuccession.getChild()
+                            .getFeature(PetriStateFeature.class)
+                            .getMarking();
+
+                    int queueLength = marking.getTokens("queue");
+                    int activeServices = Math.min(poolSize, queueLength);
+
+                    accumulatedService += activeServices * deltaT.doubleValue();
+
+                    // 👉 LOG DI DEBUG
+                    System.out.printf(
+                            "[DEBUG] deltaT = %.6f | activeServices = %d | accumulatedService = %.6f | elapsedTime = %.6f%n",
+                            deltaT.doubleValue(), activeServices, accumulatedService, currentTime.doubleValue()
+                    );
                 }
+                lastTime = currentTime;
             }
         }
         notifyObservers();
     }
+
 
     @Override
     public void addObserver(RewardObserver observer) {
@@ -74,5 +94,4 @@ public class ServiceUtilizationReward implements Reward {
             observer.update(rewardEvent);
         }
     }
-
 }

@@ -1,6 +1,8 @@
-//AbandonRateReward.java
+
 package myPackage;
 
+import lombok.Getter;
+import lombok.Setter;
 import org.oristool.analyzer.Succession;
 import org.oristool.simulator.Sequencer;
 import org.oristool.simulator.rewards.DiscreteRewardTime;
@@ -13,6 +15,8 @@ import java.util.List;
 public class AbandonRateReward implements Reward {
     private final Sequencer sequencer;
     private int abandonCount = 0;
+    @Setter
+    @Getter
     private int arrivalCount = 0;
     private final List<RewardObserver> observers = new ArrayList<>(); // Lista per gestire gli observer
 
@@ -80,11 +84,4 @@ public class AbandonRateReward implements Reward {
         }
     }
 
-    public int getArrivalCount() {
-        return arrivalCount;
-    }
-
-    public void setArrivalCount(int arrivalCount) {
-        this.arrivalCount = arrivalCount;
-    }
 }

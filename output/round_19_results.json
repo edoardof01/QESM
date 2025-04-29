@@ -1,0 +1,18 @@
+{
+  "round": 19,
+  "mode": "static",
+  "abbandono": 0.023809523809523808,
+  "blocco": 0.14720812182741116,
+  "utilizzo": 0.09925982783722284,
+  "weights": [
+    0.605104,
+    0.198347,
+    0.100432,
+    0.096116
+  ],
+  "images": {
+    "fit": "bph_fit_chart_round19.png",
+    "hist": "interarrival_hist_round19.png",
+    "cdf": "cdf_round19.png"
+  }
+}

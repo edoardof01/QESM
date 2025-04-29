@@ -1,6 +1,5 @@
 package myPackage;
 
-import org.oristool.analyzer.Succession;
 import org.oristool.simulator.Sequencer;
 import org.oristool.simulator.rewards.DiscreteRewardTime;
 import org.oristool.simulator.rewards.Reward;

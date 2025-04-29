@@ -1,4 +1,4 @@
-//FunctionsCalculator.java
+
 package myPackage;
 import java.math.BigDecimal;
 import java.math.RoundingMode;

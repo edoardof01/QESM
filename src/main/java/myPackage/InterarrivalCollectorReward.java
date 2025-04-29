@@ -1,3 +1,4 @@
+
 package myPackage;
 
 import org.oristool.analyzer.Succession;
@@ -15,10 +16,7 @@ import org.jfree.data.xy.XYSeriesCollection;
 import java.io.File;
 import java.math.BigDecimal;
 import java.math.RoundingMode;
-import java.util.ArrayList;
-import java.util.HashMap;
-import java.util.List;
-import java.util.Map;
+import java.util.*;
 
 public class InterarrivalCollectorReward implements Reward {
     private final Sequencer sequencer;
@@ -27,10 +25,16 @@ public class InterarrivalCollectorReward implements Reward {
     private final Map<String, List<BigDecimal>> arrivalTimesByType = new HashMap<>();
     private final Map<String, Integer> arrivalCount = new HashMap<>();
 
+    // ✅ Nuovo: per aggiornare i pesi ogni 10 inter-arrivi
+    private final DynamicCDFSampler dynamicSampler;
+    private List<BigDecimal> weights;
 
-    public InterarrivalCollectorReward(Sequencer sequencer) {
+    public InterarrivalCollectorReward(Sequencer sequencer,
+                                       DynamicCDFSampler dynamicSampler,
+                                       List<BigDecimal> weights) {
         this.sequencer = sequencer;
-        // per catturare ogni firing di run corrente
+        this.dynamicSampler = dynamicSampler;
+        this.weights = weights;
         this.sequencer.addCurrentRunObserver(this);
     }
 
@@ -42,24 +46,6 @@ public class InterarrivalCollectorReward implements Reward {
     @Override
     public RewardTime getRewardTime() {
         return new DiscreteRewardTime();
-    }
-
-    @Override
-    public void update(Sequencer.SequencerEvent event) {
-        if (event == Sequencer.SequencerEvent.FIRING_EXECUTED) {
-            Succession last = sequencer.getLastSuccession();
-            if (last != null && last.getEvent().getName().startsWith("arrival")) {
-                String name = last.getEvent().getName();
-                BigDecimal time = sequencer.getCurrentRunElapsedTime();
-
-                arrivalTimes.add(time);
-                arrivalTimesByType.putIfAbsent(name, new ArrayList<>());
-                arrivalTimesByType.get(name).add(time);
-
-                arrivalCount.put(name, arrivalCount.getOrDefault(name, 0) + 1);
-            }
-        }
-        notifyObservers();
     }
 
     @Override
@@ -83,28 +69,55 @@ public class InterarrivalCollectorReward implements Reward {
         }
     }
 
-    /**
-     * Chiamare subito dopo sequencer.simulate():
-     * - calcola inter‑arrival
-     * - costruisce la CDF empirica
-     * - genera e salva un grafico PNG in progetto
-     */
+    @Override
+    public void update(Sequencer.SequencerEvent event) {
+        if (event == Sequencer.SequencerEvent.FIRING_EXECUTED) {
+            Succession last = sequencer.getLastSuccession();
+            if (last != null && last.getEvent().getName().startsWith("arrival")) {
+                String name = last.getEvent().getName();
+                BigDecimal time = sequencer.getCurrentRunElapsedTime();
+
+                arrivalTimes.add(time);
+                arrivalTimesByType.putIfAbsent(name, new ArrayList<>());
+                arrivalTimesByType.get(name).add(time);
+
+                arrivalCount.put(name, arrivalCount.getOrDefault(name, 0) + 1);
+
+                // ✅ Gestione aggiornamento dinamico
+                if (dynamicSampler != null) {
+                    if (!arrivalTimes.isEmpty()) {
+                        int n = arrivalTimes.size();
+                        if (n >= 2) {
+                            BigDecimal delta = arrivalTimes.get(n - 1).subtract(arrivalTimes.get(n - 2));
+                            dynamicSampler.addInterArrivalTime(delta);
+
+                            if (dynamicSampler.shouldUpdateWeights()) {
+                                weights = dynamicSampler.updateWeights(weights);
+                                System.out.println("🔄 Pesi aggiornati dinamicamente dopo 10 inter-arrivi.");
+                                System.out.println("📈 Nuovi pesi: " + weights);
+                            }
+                        }
+                    }
+                }
+            }
+        }
+        notifyObservers();
+    }
+
+    /** ✅ Per salvare il grafico della CDF */
     public void reportCDF(String outputPngPath) {
         if (arrivalTimes.size() < 2) {
             System.out.println("⚠️  Pochi arrivi per calcolare inter-arrival.");
             return;
         }
 
-        // 1) calcola gli intertempi
         List<BigDecimal> inters = new ArrayList<>();
         for (int i = 1; i < arrivalTimes.size(); i++) {
             inters.add(arrivalTimes.get(i).subtract(arrivalTimes.get(i - 1)));
         }
 
-        // 2) calcola la CDF empirica
         List<BigDecimal> cdf = FunctionsCalculator.calculateCDF(inters);
 
-        // 3) prepara la serie XY per JFreeChart
         XYSeries series = new XYSeries("Empirical CDF");
         for (int i = 0; i < inters.size(); i++) {
             series.add(
@@ -114,7 +127,6 @@ public class InterarrivalCollectorReward implements Reward {
         }
         var dataset = new XYSeriesCollection(series);
 
-        // 4) crea il grafico
         JFreeChart chart = ChartFactory.createXYStepChart(
                 "Empirical CDF of Interarrival Times",
                 "Interarrival Time",
@@ -122,7 +134,6 @@ public class InterarrivalCollectorReward implements Reward {
                 dataset
         );
 
-        // 5) salva su file
         try {
             ChartUtils.saveChartAsPNG(
                     new File(outputPngPath),
@@ -135,6 +146,7 @@ public class InterarrivalCollectorReward implements Reward {
         }
     }
 
+    /** ✅ Per stampare statistiche di arrivo */
     public void reportArrivalStats() {
         int totalArrivals = arrivalCount.values().stream().mapToInt(i -> i).sum();
 
@@ -158,5 +170,4 @@ public class InterarrivalCollectorReward implements Reward {
                     label, arrivalCount.get(label), perc, avg.doubleValue());
         }
     }
-
 }
