@@ -8,27 +8,56 @@ export default function SimulationViewer() {
     const [rounds, setRounds] = useState([]);
     const [loading, setLoading] = useState(false);
     const [error, setError] = useState("");
-    const [inputValue, setInputValue] = useState(1); // valore raw dell'input
+    const [inputValue, setInputValue] = useState(1);
 
     async function runSimulation() {
         setLoading(true);
         setError("");
         setRounds([]);
 
+        // Assicurati di usare il valore più recente dall'input
+        const finalRoundCount = Math.min(20, Math.max(1, Number(inputValue) || 1));
+        setRoundCount(finalRoundCount);
+
         try {
+            // 1. Avvia la simulazione e aspetta che finisca
             const start = await fetch(
-                `http://localhost:8081/simulate?mode=${mode}&rounds=${roundCount}`,
+                `http://localhost:8081/simulate?mode=${mode}&rounds=${finalRoundCount}`,
                 { method: "GET" }
             );
             if (!start.ok) throw new Error("Impossibile avviare la simulazione");
 
-            // 2. Carica tutti i JSON generati
+            // 2. Aspetta un po' per assicurarsi che tutti i file siano stati scritti
+            await new Promise(resolve => setTimeout(resolve, 1000));
+
+            // 3. Carica tutti i JSON generati con retry logic
             const loaded = [];
-            for (let i = 1; i <= roundCount; i++) {
-                const res = await fetch(`/output/round_${i}_results.json`);
-                if (!res.ok) throw new Error(`Manca round_${i}_results.json`);
-                loaded.push(await res.json());
+            for (let i = 1; i <= finalRoundCount; i++) {
+                let attempts = 0;
+                const maxAttempts = 5;
+
+                while (attempts < maxAttempts) {
+                    try {
+                        const res = await fetch(`/output/round_${i}_results.json`);
+                        if (res.ok) {
+                            const data = await res.json();
+                            loaded.push(data);
+                            break;
+                        } else if (attempts === maxAttempts - 1) {
+                            throw new Error(`File round_${i}_results.json non trovato dopo ${maxAttempts} tentativi`);
+                        }
+                    } catch (err) {
+                        if (attempts === maxAttempts - 1) {
+                            throw new Error(`Errore caricando round_${i}_results.json: ${err.message}`);
+                        }
+                    }
+
+                    attempts++;
+                    // Aspetta un po' prima del prossimo tentativo
+                    await new Promise(resolve => setTimeout(resolve, 500));
+                }
             }
+
             setRounds(loaded);
         } catch (err) {
             setError(err.message);
@@ -38,15 +67,22 @@ export default function SimulationViewer() {
     }
 
     const handleInputChange = (e) => {
-        setInputValue(e.target.value);
+        const value = e.target.value;
+        setInputValue(value);
+
+        // Aggiorna anche roundCount immediatamente se il valore è valido
+        const numValue = Number(value);
+        if (!isNaN(numValue) && numValue >= 1 && numValue <= 20) {
+            setRoundCount(numValue);
+        }
     };
 
     const handleInputBlur = () => {
         let value = Number(inputValue);
         if (isNaN(value)) value = 1;
-        value = Math.min(20, Math.max(1, value)); // forziamo tra 1 e 20
+        value = Math.min(20, Math.max(1, value));
         setRoundCount(value);
-        setInputValue(value); // aggiorna il valore nell'input
+        setInputValue(value);
     };
 
     return (
@@ -77,53 +113,119 @@ export default function SimulationViewer() {
                 <button
                     onClick={runSimulation}
                     disabled={loading}
-                    className="px-4 py-2 bg-blue-600 text-white rounded shadow"
+                    className="px-4 py-2 bg-blue-600 text-white rounded shadow disabled:bg-gray-400"
                 >
                     {loading ? "Simulazione..." : "Avvia simulazione"}
                 </button>
             </div>
 
             {/* Messaggio di errore */}
-            {error && <p className="text-red-600">{error}</p>}
+            {error && (
+                <div className="p-4 bg-red-100 border border-red-400 text-red-700 rounded">
+                    {error}
+                </div>
+            )}
+
+            {/* Status durante il caricamento */}
+            {loading && (
+                <div className="p-4 bg-blue-100 border border-blue-400 text-blue-700 rounded">
+                    Eseguendo simulazione con {Math.min(20, Math.max(1, Number(inputValue) || 1))} round in modalità {mode}...
+                </div>
+            )}
 
             {/* Visualizzazione dei risultati */}
-            {rounds.map(r => (
-                <details key={r.round} className="border p-4 rounded">
-                    <summary className="cursor-pointer font-semibold">
-                        Round {r.round} – {r.mode}
-                    </summary>
+            {rounds.length > 0 && (
+                <div className="mt-6">
+                    <h2 className="text-xl font-semibold mb-4">
+                        Risultati simulazione ({rounds.length} round{rounds.length > 1 ? 's' : ''})
+                    </h2>
 
-                    <p>Abbandono: {r.abbandono.toFixed(4)}</p>
-                    <p>Blocco: {r.blocco.toFixed(4)}</p>
-                    <p>Utilizzo: {r.utilizzo.toFixed(4)}</p>
+                    {rounds.map(r => (
+                        <details key={r.round} className="border p-4 rounded mb-4 bg-gray-50">
+                            <summary className="cursor-pointer font-semibold text-lg hover:text-blue-600">
+                                Round {r.round} – {r.mode}
+                            </summary>
 
-                    <h4 className="mt-2 font-semibold">Pesi</h4>
-                    <ul className="list-disc list-inside">
-                        {r.weights.map((w, i) => (
-                            <li key={i}>W{i + 1} = {w}</li>
-                        ))}
-                    </ul>
+                            <div className="mt-4 grid grid-cols-1 md:grid-cols-3 gap-4">
+                                <div className="bg-white p-3 rounded shadow">
+                                    <h4 className="font-semibold text-red-600">Abbandono</h4>
+                                    <p className="text-2xl">{r.abbandono.toFixed(4)}</p>
+                                </div>
+                                <div className="bg-white p-3 rounded shadow">
+                                    <h4 className="font-semibold text-orange-600">Blocco</h4>
+                                    <p className="text-2xl">{r.blocco.toFixed(4)}</p>
+                                </div>
+                                <div className="bg-white p-3 rounded shadow">
+                                    <h4 className="font-semibold text-green-600">Utilizzo</h4>
+                                    <p className="text-2xl">{r.utilizzo.toFixed(4)}</p>
+                                </div>
+                            </div>
 
-                    <h4 className="mt-3 font-semibold">Grafici</h4>
-                    <div className="grid grid-cols-1 md:grid-cols-3 gap-6 mt-4">
-                        <img
-                            src={`/output/${r.images.cdf}`}
-                            alt="CDF"
-                            className="w-full h-auto max-h-96 object-contain border"
-                        />
-                        <img
-                            src={`/output/${r.images.hist}`}
-                            alt="Istogramma inter-arrivi"
-                            className="w-full h-auto max-h-96 object-contain border"
-                        />
-                        <img
-                            src={`/output/${r.images.fit}`}
-                            alt="BPH Fit"
-                            className="w-full h-auto max-h-96 object-contain border"
-                        />
-                    </div>
-                </details>
-            ))}
+                            <div className="mt-4 bg-white p-3 rounded shadow">
+                                <h4 className="font-semibold">Pesi</h4>
+                                <div className="flex flex-wrap gap-2 mt-2">
+                                    {r.weights.map((w, i) => (
+                                        <span key={i} className="px-2 py-1 bg-blue-100 text-blue-800 rounded text-sm">
+                                            W{i + 1} = {w}
+                                        </span>
+                                    ))}
+                                </div>
+                            </div>
+
+                            <h4 className="mt-4 font-semibold">Grafici</h4>
+                            <div className="grid grid-cols-1 md:grid-cols-3 gap-6 mt-4">
+                                <div className="bg-white p-2 rounded shadow">
+                                    <h5 className="text-sm font-medium mb-2">CDF Empirica</h5>
+                                    <img
+                                        src={`/output/${r.images.cdf}`}
+                                        alt="CDF"
+                                        className="w-full h-auto max-h-96 object-contain border"
+                                        onError={(e) => {
+                                            e.target.style.display = 'none';
+                                            e.target.nextSibling.style.display = 'block';
+                                        }}
+                                    />
+                                    <div style={{display: 'none'}} className="text-red-500 text-sm">
+                                        Immagine non disponibile
+                                    </div>
+                                </div>
+
+                                <div className="bg-white p-2 rounded shadow">
+                                    <h5 className="text-sm font-medium mb-2">Istogramma Inter-arrivi</h5>
+                                    <img
+                                        src={`/output/${r.images.hist}`}
+                                        alt="Istogramma inter-arrivi"
+                                        className="w-full h-auto max-h-96 object-contain border"
+                                        onError={(e) => {
+                                            e.target.style.display = 'none';
+                                            e.target.nextSibling.style.display = 'block';
+                                        }}
+                                    />
+                                    <div style={{display: 'none'}} className="text-red-500 text-sm">
+                                        Immagine non disponibile
+                                    </div>
+                                </div>
+
+                                <div className="bg-white p-2 rounded shadow">
+                                    <h5 className="text-sm font-medium mb-2">BPH Fit</h5>
+                                    <img
+                                        src={`/output/${r.images.fit}`}
+                                        alt="BPH Fit"
+                                        className="w-full h-auto max-h-96 object-contain border"
+                                        onError={(e) => {
+                                            e.target.style.display = 'none';
+                                            e.target.nextSibling.style.display = 'block';
+                                        }}
+                                    />
+                                    <div style={{display: 'none'}} className="text-red-500 text-sm">
+                                        Immagine non disponibile
+                                    </div>
+                                </div>
+                            </div>
+                        </details>
+                    ))}
+                </div>
+            )}
         </div>
     );
 }

@@ -30,8 +30,9 @@ public class SimulazioneEndpoint {
 
     @GetMapping("/output/{filename:.+}")
     public ResponseEntity<Resource> serveOutput(@PathVariable String filename) throws IOException {
-        File file = Paths.get("C:", "Projects", "QESM", "output", filename).toFile();
-
+        // Usa System.getProperty("user.dir") per ottenere la directory di lavoro corrente
+        // e Paths.get per costruire un percorso compatibile con il sistema operativo
+        File file = Paths.get(System.getProperty("user.dir"), "output", filename).toFile();
 
         System.out.println("🔍 Cerco file: " + file.getAbsolutePath());
 
@@ -40,11 +41,10 @@ public class SimulazioneEndpoint {
         }
 
         String contentType = filename.endsWith(".json") ? "application/json" : "image/png";
-        Resource resource = (Resource) new InputStreamResource(new FileInputStream(file));
+        Resource resource = new InputStreamResource(new FileInputStream(file));
 
         return ResponseEntity.ok()
                 .contentType(MediaType.parseMediaType(contentType))
                 .body(resource);
     }
-
 }
