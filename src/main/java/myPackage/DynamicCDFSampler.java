@@ -1,4 +1,3 @@
-
 package myPackage;
 
 import java.math.BigDecimal;
@@ -12,15 +11,15 @@ import java.util.*;
 public class DynamicCDFSampler {
     private static final BigDecimal[] DEFAULT_PERCENTILES = {
             BigDecimal.ZERO,
-            new BigDecimal("0.60"),
-            new BigDecimal("0.80"),
+            new BigDecimal("0.50"),
+            new BigDecimal("0.70"),
             new BigDecimal("0.90"),
             BigDecimal.ONE
     };
 
     private final CDFSampler sampler;
     private final int windowSize;
-    private final int updateFrequency;  // Numero di interarrivi prima di aggiornare i pesi
+    private final int updateFrequency;
     private final LinkedList<BigDecimal> recentInterArrivals = new LinkedList<>();
     private int arrivalsSinceLastUpdate = 0;
     private final boolean verbose;
@@ -33,13 +32,27 @@ public class DynamicCDFSampler {
                 || tolerance.compareTo(BigDecimal.ZERO) <= 0
                 || windowSize <= 0) {
             throw new IllegalArgumentException(
-                    "learningRate, tolerance e windowSize devono essere > 0"
+                    "learningRate, tolerance e windowSize devono essere >, 0"
             );
         }
         this.sampler = new CDFSampler(learningRate, tolerance, verbose);
         this.windowSize = windowSize;
-        this.updateFrequency = 10;  // Aggiorna automaticamente ogni 10 inter-arrivi
+        this.updateFrequency = 10;
         this.verbose = verbose;
+    }
+
+    /**
+     * Valuta e aggiorna i pesi usando una lista di inter-arrivi.
+     * Questo metodo è l'interfaccia principale per il main loop.
+     */
+    public List<BigDecimal> evaluateAndAdjustWeights(List<BigDecimal> interArrivals, List<BigDecimal> weights) {
+        // Step 1: Aggiungi tutti i nuovi inter-arrivi alla sliding window
+        for (BigDecimal interArrival : interArrivals) {
+            addInterArrivalTime(interArrival);
+        }
+        // Step 2: Aggiorna i pesi utilizzando i dati della sliding window
+        // Usa il metodo esistente `updateWeights`
+        return updateWeights(weights);
     }
 
     public void addInterArrivalTime(BigDecimal interArrivalTime) {
@@ -47,7 +60,6 @@ public class DynamicCDFSampler {
         if (recentInterArrivals.size() > windowSize) {
             recentInterArrivals.pollFirst();
         }
-
         arrivalsSinceLastUpdate++;
     }
 
@@ -82,7 +94,6 @@ public class DynamicCDFSampler {
         }
 
         List<BigDecimal> updatedWeights = sampler.updateWithObservedPdf(aggregated, weights);
-
         arrivalsSinceLastUpdate = 0;
 
         return updatedWeights;

@@ -43,17 +43,12 @@ public class AbandonRateReward implements Reward {
             if (lastSuccession != null) {
                 String eventName = lastSuccession.getEvent().getName();
 
-                if ("arrival".equals(eventName) ||
-                        "arrival1".equals(eventName) ||
-                        "arrival2".equals(eventName) ||
-                        "arrival3".equals(eventName) ||
-                        "arrival4".equals(eventName)) {
+                if (eventName.startsWith("arrival")) {
                     arrivalCount++;
                 }
 
                 if ("abandon".equals(eventName)) {
                     abandonCount++;
-                    notifyObservers();
                 }
             }
         }
@@ -62,16 +57,16 @@ public class AbandonRateReward implements Reward {
 
     @Override
     public Object evaluate() {
-        return arrivalCount > 0 ? abandonCount / (double) arrivalCount : 0.0;
+        double result = arrivalCount > 0 ? abandonCount / (double) arrivalCount : 0.0;
+        notifyObservers();
+        return result;
     }
 
-    // Aggiunge un observer alla lista
     @Override
     public void addObserver(RewardObserver observer) {
         observers.add(observer);
     }
 
-    // Rimuove un observer dalla lista
     @Override
     public void removeObserver(RewardObserver observer) {
         observers.remove(observer);

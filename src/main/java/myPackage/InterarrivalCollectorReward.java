@@ -1,4 +1,3 @@
-
 package myPackage;
 
 import org.oristool.analyzer.Succession;
@@ -27,14 +26,16 @@ public class InterarrivalCollectorReward implements Reward {
 
     //  per aggiornare i pesi ogni 10 inter-arrivi
     private final DynamicCDFSampler dynamicSampler;
-    private List<BigDecimal> weights;
+    // REFERENZA alla lista dei pesi passata dal Main (aggiornata IN-PLACE)
+    private final List<BigDecimal> weights;
 
     public InterarrivalCollectorReward(Sequencer sequencer,
                                        DynamicCDFSampler dynamicSampler,
                                        List<BigDecimal> weights) {
         this.sequencer = sequencer;
         this.dynamicSampler = dynamicSampler;
-        this.weights = weights;
+        // NON creare una nuova lista: teniamo la stessa referenza che Main ha passato
+        this.weights = Objects.requireNonNull(weights, "weights cannot be null");
         this.sequencer.addCurrentRunObserver(this);
     }
 
@@ -85,17 +86,21 @@ public class InterarrivalCollectorReward implements Reward {
 
                 // Gestione aggiornamento dinamico
                 if (dynamicSampler != null) {
-                    if (!arrivalTimes.isEmpty()) {
+                    if (arrivalTimes.size() >= 2) {
                         int n = arrivalTimes.size();
-                        if (n >= 2) {
-                            BigDecimal delta = arrivalTimes.get(n - 1).subtract(arrivalTimes.get(n - 2));
-                            dynamicSampler.addInterArrivalTime(delta);
+                        BigDecimal delta = arrivalTimes.get(n - 1).subtract(arrivalTimes.get(n - 2));
+                        // Aggiunge alla finestra interna del dynamicSampler
+                        dynamicSampler.addInterArrivalTime(delta);
 
-                            if (dynamicSampler.shouldUpdateWeights()) {
-                                weights = dynamicSampler.updateWeights(weights);
-                                System.out.println("🔄 Pesi aggiornati dinamicamente dopo 10 inter-arrivi.");
-                                System.out.println("📈 Nuovi pesi: " + weights);
+                        if (dynamicSampler.shouldUpdateWeights()) {
+                            // Chiediamo l'aggiornamento; dynamicSampler usa la sua finestra per calcolare i pesi
+                            List<BigDecimal> newWeights = dynamicSampler.updateWeights(new ArrayList<>(weights));
+                            // AGGIORNIAMO IN-PLACE la lista che Main possiede:
+                            synchronized (weights) {
+                                weights.clear();
+                                weights.addAll(newWeights);
                             }
+                            System.out.println("Nuovi pesi: " + weights);
                         }
                     }
                 }
@@ -169,5 +174,23 @@ public class InterarrivalCollectorReward implements Reward {
             System.out.printf("%s: count=%d (%.2f%%), avg interarrival = %.4f%n",
                     label, arrivalCount.get(label), perc, avg.doubleValue());
         }
+    }
+
+    /**
+     * Ritorna i pesi correnti (una vista immutabile della lista condivisa).
+     * Main può usare questo per ottenere i pesi aggiornati dopo la simulazione.
+     */
+    public List<BigDecimal> getWeights() {
+        // restituiamo una copia immutabile per sicurezza
+        synchronized (weights) {
+            return Collections.unmodifiableList(new ArrayList<>(weights));
+        }
+    }
+
+    /**
+     * Ritorna i tempi di arrivo (utile se Main vuole leggerli).
+     */
+    public List<BigDecimal> getArrivalTimes() {
+        return new ArrayList<>(arrivalTimes);
     }
 }

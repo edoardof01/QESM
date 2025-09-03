@@ -13,11 +13,6 @@ public class CDFSampler {
     private final BigDecimal tolerance;     // Tolleranza configurabile
     private final boolean verbose;          // Per abilitare log
 
-    public CDFSampler() {
-        this.learningRate = new BigDecimal("0.1");
-        this.tolerance    = new BigDecimal("0.01");
-        this.verbose      = false;
-    }
 
     public CDFSampler(BigDecimal learningRate, BigDecimal tolerance, boolean verbose) {
         if (learningRate.compareTo(BigDecimal.ZERO) <= 0)
@@ -47,8 +42,8 @@ public class CDFSampler {
             // percentili di cut (es: [0%, 60%, 80%, 90%, 100%])
             BigDecimal[] percentiles = {
                     BigDecimal.ZERO,
-                    new BigDecimal("0.60"),
-                    new BigDecimal("0.80"),
+                    new BigDecimal("0.50"),
+                    new BigDecimal("0.70"),
                     new BigDecimal("0.90"),
                     BigDecimal.ONE
             };

@@ -20,7 +20,6 @@ import java.util.ArrayList;
 import java.util.Collections;
 import java.util.List;
 
-
 public class Main {
 
     public static void main(String[] args) throws IOException {
@@ -33,15 +32,15 @@ public class Main {
         boolean useDynamicMode = args[0].equalsIgnoreCase("dynamic");
         String mode = useDynamicMode ? "dynamic" : "static";
 
-        //  Prepara cartella di output
+        // Prepara cartella di output
         File outDir = new File("output");
         if (!outDir.exists()) {
             outDir.mkdirs();
         }
 
-        //  Parametri base
+        // Parametri base
         int queueSize = 8;
-        int poolSize  = 8;
+        int poolSize = 8;
         int rounds = 1;
         if (args.length >= 2) {
             try {
@@ -51,7 +50,6 @@ public class Main {
             }
         }
 
-
         // Pesi iniziali normalizzati
         List<BigDecimal> weights = new ArrayList<>(List.of(
                 new BigDecimal("0.9"),
@@ -59,17 +57,6 @@ public class Main {
                 new BigDecimal("0.03"),
                 new BigDecimal("0.02")
         ));
-
-        // Sampler dinamico (se richiesto)
-        DynamicCDFSampler dynamicSampler = null;
-        if (useDynamicMode) {
-            dynamicSampler = new DynamicCDFSampler(
-                    new BigDecimal("0.1"),   // learningRate
-                    new BigDecimal("0.01"),  // tolerance
-                    40,                      // windowSize
-                    true                     // verbose logging
-            );
-        }
 
         // Loop principale
         for (int round = 1; round <= rounds; round++) {
@@ -80,11 +67,32 @@ public class Main {
             var sequencer = setup.getSequencer();
 
             // Rewards
-            var abandonReward     = new AbandonRateReward(sequencer);
-            var blockReward       = new BlockProbabilityReward(sequencer);
+            var abandonReward = new AbandonRateReward(sequencer);
+            var blockReward = new BlockProbabilityReward(sequencer);
             var utilizationReward = new ServiceUtilizationReward(sequencer, poolSize);
             List<Reward> observers = List.of(abandonReward, blockReward, utilizationReward);
 
+            // Crea il sampler e il collector per questo round
+            CDFSampler sampler;
+            DynamicCDFSampler dynamicSampler = null;
+            if (useDynamicMode) {
+                sampler = new CDFSampler(
+                        new BigDecimal("0.2"),
+                        new BigDecimal("0.02"),
+                        true);
+                dynamicSampler = new DynamicCDFSampler(
+                        new BigDecimal("0.2"),
+                        new BigDecimal("0.02"),
+                        30,
+                        true);
+            } else {
+                sampler = new CDFSampler(
+                        new BigDecimal("0.2"),
+                        new BigDecimal("0.02"),
+                        true);
+            }
+
+            // `weights` is passed so the collector can report the weights used for this round
             var arrivalCollector = new InterarrivalCollectorReward(sequencer, dynamicSampler, weights);
 
             // Tempo massimo simulazione
@@ -96,8 +104,8 @@ public class Main {
             // Statistiche
             arrivalCollector.reportArrivalStats();
             double abbandono = (double) abandonReward.evaluate();
-            double blocco    = (double) blockReward.evaluate();
-            double utilizzo  = (double) utilizationReward.evaluate();
+            double blocco = (double) blockReward.evaluate();
+            double utilizzo = (double) utilizationReward.evaluate();
 
             System.out.printf("Abbandono: %.4f%n", abbandono);
             System.out.printf("Blocco:    %.4f%n", blocco);
@@ -120,50 +128,35 @@ public class Main {
             arrivalCollector.reportCDF(new File(outDir, "cdf_round" + round + ".png").getPath());
 
             // --- Istogramma inter-arrival ---
-            var arrivalTimes  = blockReward.getArrivalTimes();
+            var arrivalTimes = arrivalCollector.getArrivalTimes();
             List<BigDecimal> interArrivals = new ArrayList<>();
             for (int i = 1; i < arrivalTimes.size(); i++) {
                 BigDecimal delta = arrivalTimes.get(i).subtract(arrivalTimes.get(i - 1));
                 interArrivals.add(delta);
-                if (useDynamicMode) {
-                    dynamicSampler.addInterArrivalTime(delta);
-                }
             }
             plotInterarrivalHistogram(interArrivals, 20,
                     new File(outDir, "interarrival_hist_round" + round + ".png").getPath());
 
             // --- Update PESI e grafico BPH ---
-            if (!useDynamicMode) {
-                if (interArrivals.isEmpty()) {
-                    System.out.println("⚠️  Nessun intertempo per aggiornare i pesi.");
-                } else {
-                    var sampler = new CDFSampler(new BigDecimal("0.1"), new BigDecimal("0.01"), true);
-                    List<BigDecimal> pdfAggregata = sampler.evaluateAndAdjustWeights(interArrivals, weights);
-                    System.out.println("\n==== WEIGHTS STATIC ====");
-                    for (int i = 0; i < weights.size(); i++) {
-                        System.out.printf("W%d = %.4f%n", i + 1, weights.get(i));
-                    }
-                    plotBPH(pdfAggregata, weights,
-                            new File(outDir, "bph_fit_chart_round" + round + ".png").getPath());
-                }
+            if (interArrivals.isEmpty()) {
+                System.out.println("⚠️ Nessun intertempo per aggiornare i pesi.");
             } else {
-                weights = dynamicSampler.updateWeights(weights);
-                System.out.println("\n==== WEIGHTS DYNAMIC ====");
+                // Aggiorna i pesi per il prossimo round
+                if (!useDynamicMode) {
+                    sampler.evaluateAndAdjustWeights(interArrivals, weights);
+                } else {
+                    System.out.println("Modalità dinamica: pesi aggiornati automaticamente durante la simulazione");
+                }
+
+                System.out.println("\n==== PESI AGGIORNATI ====");
                 for (int i = 0; i < weights.size(); i++) {
                     System.out.printf("W%d = %.4f%n", i + 1, weights.get(i));
                 }
 
-                // Calcola anche PDF aggregata per poterla visualizzare
-                List<BigDecimal> pdfAggregata = Collections.emptyList();
-                if (!interArrivals.isEmpty()) {
-                    var sampler = new CDFSampler(new BigDecimal("0.1"), new BigDecimal("0.01"), true);
-                    pdfAggregata = sampler.evaluateAndAdjustWeights(interArrivals, new ArrayList<>(weights));
-                }
-
+                List<BigDecimal> pdfAggregata = sampler.evaluateAndAdjustWeights(interArrivals, new ArrayList<>(weights));
                 plotBPH(pdfAggregata, weights,
                         new File(outDir, "bph_fit_chart_round" + round + ".png").getPath());
             }
-
         }
     }
 
@@ -276,9 +269,4 @@ public class Main {
         ChartUtils.saveChartAsPNG(new File(filename), chart, 800, 600);
         System.out.println("📊 Istogramma inter-arrivi salvato in " + filename);
     }
-
-
 }
-
-
-

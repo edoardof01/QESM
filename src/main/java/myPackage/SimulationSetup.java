@@ -1,5 +1,3 @@
-
-
 package myPackage;
 import lombok.Getter;
 import org.oristool.models.stpn.MarkingExpr;

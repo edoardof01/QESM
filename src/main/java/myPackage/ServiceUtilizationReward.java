@@ -1,4 +1,3 @@
-
 package myPackage;
 
 import org.oristool.analyzer.Succession;
@@ -14,11 +13,16 @@ import java.math.BigDecimal;
 import java.util.HashSet;
 import java.util.Set;
 
-// ServiceUtilizationReward corretto: calcolo su min(PoolSize, QueueLength)
+/**
+ * ServiceUtilizationReward CORRETTO: calcola l'utilizzo reale dei server
+ * basandosi sui token effettivamente presenti nel place "servers".
+ * Logica: utilization = (poolSize - serversLiberi) / poolSize
+ * dove serversLiberi = marking.getTokens("servers")
+ */
 public class ServiceUtilizationReward implements Reward {
     private final Sequencer sequencer;
     private final int poolSize;
-    private double accumulatedService = 0.0;
+    private double accumulatedUtilization = 0.0;
     private BigDecimal lastTime = BigDecimal.ZERO;
     private final Set<RewardObserver> observers = new HashSet<>();
 
@@ -41,14 +45,24 @@ public class ServiceUtilizationReward implements Reward {
     @Override
     public Object evaluate() {
         BigDecimal elapsedTime = sequencer.getCurrentRunElapsedTime();
-        return elapsedTime.compareTo(BigDecimal.ZERO) > 0
-                ? accumulatedService / elapsedTime.doubleValue()
-                : 0.0;
-    }
+        if (elapsedTime.compareTo(BigDecimal.ZERO) <= 0 || poolSize == 0) {
+            return 0.0;
+        }
 
+        // Utilization = (tempo cumulativo server occupati) / (tempo simulazione × poolSize)
+        double maxPossibleUtilization = elapsedTime.doubleValue() * poolSize;
+        return accumulatedUtilization / maxPossibleUtilization;
+    }
 
     @Override
     public void update(Sequencer.SequencerEvent event) {
+        if (event == Sequencer.SequencerEvent.RUN_START) {
+            // Reset per nuova simulazione
+            accumulatedUtilization = 0.0;
+            lastTime = BigDecimal.ZERO;
+            return;
+        }
+
         if (event == Sequencer.SequencerEvent.FIRING_EXECUTED) {
             BigDecimal currentTime = sequencer.getCurrentRunElapsedTime();
             BigDecimal deltaT = currentTime.subtract(lastTime);
@@ -59,16 +73,25 @@ public class ServiceUtilizationReward implements Reward {
                     Marking marking = lastSuccession.getChild()
                             .getFeature(PetriStateFeature.class)
                             .getMarking();
+                    int serversLiberi = marking.getTokens("servers");
+                    int serversOccupati = poolSize - serversLiberi;
 
-                    int queueLength = marking.getTokens("queue");
-                    int activeServices = Math.min(poolSize, queueLength);
+                    // Sanity check
+                    if (serversOccupati < 0) {
+                        System.err.printf("⚠️ Errore: serversOccupati = %d (serversLiberi = %d, poolSize = %d)%n",
+                                serversOccupati, serversLiberi, poolSize);
+                        serversOccupati = 0;
+                    }
 
-                    accumulatedService += activeServices * deltaT.doubleValue();
+                    // Accumula il tempo pesato per l'utilizzo
+                    accumulatedUtilization += serversOccupati * deltaT.doubleValue();
 
-                    // 👉 LOG DI DEBUG
+                    // LOG DI DEBUG
+                    double currentUtilization = accumulatedUtilization / (currentTime.doubleValue() * poolSize);
                     System.out.printf(
-                            "[DEBUG] deltaT = %.6f | activeServices = %d | accumulatedService = %.6f | elapsedTime = %.6f%n",
-                            deltaT.doubleValue(), activeServices, accumulatedService, currentTime.doubleValue()
+                            "[UTIL DEBUG] t=%.3f, Δt=%.3f, servers(liberi=%d, occupati=%d), acc=%.3f, util=%.3f%n",
+                            currentTime.doubleValue(), deltaT.doubleValue(),
+                            serversLiberi, serversOccupati, accumulatedUtilization, currentUtilization
                     );
                 }
                 lastTime = currentTime;
@@ -76,7 +99,6 @@ public class ServiceUtilizationReward implements Reward {
         }
         notifyObservers();
     }
-
 
     @Override
     public void addObserver(RewardObserver observer) {

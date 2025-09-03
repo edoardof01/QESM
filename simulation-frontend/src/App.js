@@ -4,7 +4,6 @@ import './index.css';
 export default function SimulationViewer() {
 
     const [mode, setMode] = useState("static");
-    const [roundCount, setRoundCount] = useState(1);
     const [rounds, setRounds] = useState([]);
     const [loading, setLoading] = useState(false);
     const [error, setError] = useState("");
@@ -15,22 +14,19 @@ export default function SimulationViewer() {
         setError("");
         setRounds([]);
 
-        // Assicurati di usare il valore più recente dall'input
         const finalRoundCount = Math.min(20, Math.max(1, Number(inputValue) || 1));
-        setRoundCount(finalRoundCount);
+        // Rimuovi la riga qui sotto:
+        // setRoundCount(finalRoundCount);
 
         try {
-            // 1. Avvia la simulazione e aspetta che finisca
             const start = await fetch(
-                `http://localhost:8081/simulate?mode=${mode}&rounds=${finalRoundCount}`,
+                `http://localhost:8080/simulate?mode=${mode}&rounds=${finalRoundCount}`,
                 { method: "GET" }
             );
             if (!start.ok) throw new Error("Impossibile avviare la simulazione");
 
-            // 2. Aspetta un po' per assicurarsi che tutti i file siano stati scritti
             await new Promise(resolve => setTimeout(resolve, 1000));
 
-            // 3. Carica tutti i JSON generati con retry logic
             const loaded = [];
             for (let i = 1; i <= finalRoundCount; i++) {
                 let attempts = 0;
@@ -53,11 +49,9 @@ export default function SimulationViewer() {
                     }
 
                     attempts++;
-                    // Aspetta un po' prima del prossimo tentativo
                     await new Promise(resolve => setTimeout(resolve, 500));
                 }
             }
-
             setRounds(loaded);
         } catch (err) {
             setError(err.message);
@@ -70,10 +64,10 @@ export default function SimulationViewer() {
         const value = e.target.value;
         setInputValue(value);
 
-        // Aggiorna anche roundCount immediatamente se il valore è valido
         const numValue = Number(value);
         if (!isNaN(numValue) && numValue >= 1 && numValue <= 20) {
-            setRoundCount(numValue);
+            // Rimuovi la riga qui sotto:
+            // setRoundCount(numValue);
         }
     };
 
@@ -81,7 +75,8 @@ export default function SimulationViewer() {
         let value = Number(inputValue);
         if (isNaN(value)) value = 1;
         value = Math.min(20, Math.max(1, value));
-        setRoundCount(value);
+        // Rimuovi le due righe qui sotto:
+        // setRoundCount(value);
         setInputValue(value);
     };
 
@@ -89,7 +84,6 @@ export default function SimulationViewer() {
         <div className="mx-10 max-w-7xl p-6 space-y-4">
             <h1 className="text-2xl m-3 font-bold">Dashboard simulazione BPH₄</h1>
 
-            {/* Controlli utente */}
             <div className="flex items-center gap-4">
                 <select
                     value={mode}
@@ -119,21 +113,18 @@ export default function SimulationViewer() {
                 </button>
             </div>
 
-            {/* Messaggio di errore */}
             {error && (
                 <div className="p-4 bg-red-100 border border-red-400 text-red-700 rounded">
                     {error}
                 </div>
             )}
 
-            {/* Status durante il caricamento */}
             {loading && (
                 <div className="p-4 bg-blue-100 border border-blue-400 text-blue-700 rounded">
                     Eseguendo simulazione con {Math.min(20, Math.max(1, Number(inputValue) || 1))} round in modalità {mode}...
                 </div>
             )}
 
-            {/* Visualizzazione dei risultati */}
             {rounds.length > 0 && (
                 <div className="mt-6">
                     <h2 className="text-xl font-semibold mb-4">
@@ -227,5 +218,6 @@ export default function SimulationViewer() {
                 </div>
             )}
         </div>
+
     );
 }

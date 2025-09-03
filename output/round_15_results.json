@@ -1,14 +1,14 @@
 {
   "round": 15,
-  "mode": "static",
-  "abbandono": 0.024390243902439025,
+  "mode": "dynamic",
+  "abbandono": 0.025,
   "blocco": 0.2,
-  "utilizzo": 0.13803293686884155,
+  "utilizzo": 0.14562587686125336,
   "weights": [
-    0.605938,
-    0.198061,
-    0.100852,
-    0.095149
+    0.300001,
+    0.250002,
+    0.249998,
+    0.199999
   ],
   "images": {
     "fit": "bph_fit_chart_round15.png",
